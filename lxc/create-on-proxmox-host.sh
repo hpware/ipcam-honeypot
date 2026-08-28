@@ -25,9 +25,14 @@ if ! pct status "$CTID" >/dev/null 2>&1; then
       pveam download "$TEMPLATE_STORE" "$TEMPLATE"
     fi
   else
-    # auto: newest available standard template (Debian 12/13)
-    TEMPLATE=$(pveam available | awk '{print $NF}' | grep -E '^debian-1[23]-standard_' | sort -V | tail -1)
-    [ -n "$TEMPLATE" ] || { echo "error: no debian-1x-standard template found in pveam available" >&2; exit 1; }
+    # auto: newest standard template matching this host's architecture
+    case "$(uname -m)" in
+      x86_64) PKGARCH=amd64 ;;
+      aarch64) PKGARCH=arm64 ;;
+      *) echo "error: unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+    esac
+    TEMPLATE=$(pveam available | awk '{print $NF}' | grep -E "^debian-1[23]-standard_.*_${PKGARCH}\.tar\.zst$" | sort -V | tail -1)
+    [ -n "$TEMPLATE" ] || { echo "error: no debian-1x-standard ${PKGARCH} template found in pveam available" >&2; exit 1; }
     if ! pveam list "$TEMPLATE_STORE" | grep -q "$TEMPLATE"; then
       pveam download "$TEMPLATE_STORE" "$TEMPLATE"
     fi
