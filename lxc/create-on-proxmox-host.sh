@@ -12,16 +12,27 @@ DISK=${DISK:-2}
 STORAGE=${STORAGE:-local-lvm}
 BRIDGE=${BRIDGE:-vmbr0}
 VLAN=${VLAN:-}
-TEMPLATE=${TEMPLATE:-debian-12-standard_12.7-1_amd64.tar.zst}
+TEMPLATE=${TEMPLATE:-}   # empty = auto-pick newest debian-1x-standard
 TEMPLATE_STORE=${TEMPLATE_STORE:-local}
 
 cd "$(dirname "$0")/.."
 
 if ! pct status "$CTID" >/dev/null 2>&1; then
-  if ! pveam list "$TEMPLATE_STORE" | grep -q "$TEMPLATE"; then
-    pveam update
-    pveam download "$TEMPLATE_STORE" "$TEMPLATE"
+  pveam update >/dev/null
+  if [ -n "$TEMPLATE" ]; then
+    # exact template requested — download it if missing
+    if ! pveam list "$TEMPLATE_STORE" | grep -q "$TEMPLATE"; then
+      pveam download "$TEMPLATE_STORE" "$TEMPLATE"
+    fi
+  else
+    # auto: newest available standard template (Debian 12/13)
+    TEMPLATE=$(pveam available | awk '{print $NF}' | grep -E '^debian-1[23]-standard_' | sort -V | tail -1)
+    [ -n "$TEMPLATE" ] || { echo "error: no debian-1x-standard template found in pveam available" >&2; exit 1; }
+    if ! pveam list "$TEMPLATE_STORE" | grep -q "$TEMPLATE"; then
+      pveam download "$TEMPLATE_STORE" "$TEMPLATE"
+    fi
   fi
+  echo "==> using template: $TEMPLATE"
   NET="name=eth0,bridge=${BRIDGE},ip=dhcp$( [ -n "$VLAN" ] && echo ",tag=${VLAN}" )"
   pct create "$CTID" "${TEMPLATE_STORE}:vztmpl/${TEMPLATE}" \
     --hostname "$HOSTNAME" \

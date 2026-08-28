@@ -15,7 +15,7 @@ if [ "$(id -u)" -ne 0 ]; then
   echo "error: run as root on the Proxmox VE host" >&2
   exit 1
 fi
-if [ ! -x /usr/bin/pct ] || [ ! -x /usr/bin/pveam ]; then
+if [ ! -d /etc/pve ] || ! command -v pct >/dev/null 2>&1 || ! command -v pveam >/dev/null 2>&1; then
   echo "error: pct/pveam not found — this must run on a Proxmox VE host, not inside a CT/VM" >&2
   exit 1
 fi
