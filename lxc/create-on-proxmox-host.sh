@@ -51,5 +51,5 @@ pct exec "$CTID" -- bash /root/setup.sh
 
 IP=$(pct exec "$CTID" -- sh -c "ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+)+'")
 echo
-echo "honeypot CT $CTID is up: http://$IP:8080  rtsp://$IP:8554  telnet://$IP:2323"
+echo "honeypot CT $CTID is up: http://$IP  rtsp://$IP:554  telnet://$IP"
 echo "logs: pct exec $CTID -- journalctl -u ipcam-honeypot -f"

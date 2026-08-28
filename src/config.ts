@@ -6,9 +6,9 @@ export const config = {
   // endpoints (they run the same OEM firmware, matching the real nmap fingerprint)
   personas: str("PERSONAS", "both"),
   bind: str("BIND_HOST", "0.0.0.0"),
-  httpPort: num("HTTP_PORT", 8080),
-  rtspPort: num("RTSP_PORT", 8554),
-  telnetPort: num("TELNET_PORT", 2323),
+  httpPort: num("HTTP_PORT", 80),
+  rtspPort: num("RTSP_PORT", 554),
+  telnetPort: num("TELNET_PORT", 23),
   lokiUrl: str("LOKI_URL", "http://127.0.0.1:3100").replace(/\/$/, ""),
   lokiTenant: Bun.env["LOKI_TENANT_ID"],
   lokiJob: str("LOKI_JOB", "ipcam-honeypot"),

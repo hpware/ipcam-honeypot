@@ -28,7 +28,7 @@ Then:
 
 ```sh
 pct exec 210 -- journalctl -u ipcam-honeypot -f
-# http://<ct-ip>:8080  rtsp://<ct-ip>:8554  telnet://<ct-ip>:2323
+# http://<ct-ip>  rtsp://<ct-ip>:554  telnet://<ct-ip>
 ```
 
 ## Manual (inside an existing CT)
@@ -43,10 +43,9 @@ bash setup-inside-ct.sh
 
 Edit `/opt/ipcam-honeypot/.env.local` in the CT (Bun auto-loads `.env*` from
 the working directory), then `systemctl restart ipcam-honeypot`. Ports default
-to 8080/8554/2323. To mirror the real device 1:1 set `HTTP_PORT=80
-RTSP_PORT=554`: the unit runs as unprivileged `honeypot` with an empty
-capability set, so low ports need `AmbientCapabilities=CAP_NET_BIND_SERVICE`
-added to the unit — or keep high ports and NAT 80/554 → the CT on your router.
+to the standard camera ports — HTTP 80, RTSP 554, telnet 23. The unit grants
+`CAP_NET_BIND_SERVICE` so the unprivileged `honeypot` user can bind them. To
+use different ports, set `HTTP_PORT` / `RTSP_PORT` / `TELNET_PORT`.
 
 ## Isolation (read this)
 

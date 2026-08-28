@@ -12,8 +12,9 @@ Verified against a real device with `nmap -sV`:
 
 ```
 PORT     STATE SERVICE VERSION
-8080/tcp open  http    Boa HTTPd 0.94.14rc21        <- real device: same (port 80)
-8554/tcp open  rtsp    D-Link DCS-2130 or Pelco IDE10DN webcam rtspd
+80/tcp   open  http    Boa HTTPd 0.94.14rc21
+554/tcp  open  rtsp    D-Link DCS-2130 or Pelco IDE10DN webcam rtspd
+23/tcp   open  telnet  telnetd
 Service Info: Device: webcam; CPE: cpe:/h:pelco:ide10dn
 ```
 
@@ -26,9 +27,9 @@ sends — that is the signature nmap matches on. The HTTP listener replies
 
 | Service | Default port | Details |
 | --- | --- | --- |
-| HTTP (Boa) | 8080 | DCS-2130 web UI (login form, live video page, setup pages), NIPCA endpoints (`/image/jpeg.cgi`, `/video/mjpg.cgi`, `/dms`, `/ipcam/stream.cgi`), Pelco aliases (`/jpeg`, `/jpeg/qvga.jpg`, `/jpeg/pull`) |
-| RTSP | 8554 | OPTIONS / DESCRIBE (H264 SDP) / SETUP / PLAY / PAUSE / TEARDOWN for `/live1.sdp`, `/1/stream1`, `/stream1`; `Authorization: Basic` values captured (CVE-2017-8410 overflow probes) |
-| Telnet | 2323 | generic telnetd fingerprint, then a BusyBox v1.19.4 shell backed by a virtual camera filesystem: `ls`/`cat /etc/passwd`/`ps` (boa, rtspd)/`uname -a` (Linux 2.6.31.8, armv5tejl)/`ifconfig`/`netstat`/`busybox` applet list, `wget`/`ping`/`reboot` attempts logged, unknown commands get `sh: x: not found` (Cowrie-lite) |
+| HTTP (Boa) | 80 | DCS-2130 web UI (login form, live video page, setup pages), NIPCA endpoints (`/image/jpeg.cgi`, `/video/mjpg.cgi`, `/dms`, `/ipcam/stream.cgi`), Pelco aliases (`/jpeg`, `/jpeg/qvga.jpg`, `/jpeg/pull`) |
+| RTSP | 554 | OPTIONS / DESCRIBE (H264 SDP) / SETUP / PLAY / PAUSE / TEARDOWN for `/live1.sdp`, `/1/stream1`, `/stream1`; `Authorization: Basic` values captured (CVE-2017-8410 overflow probes) |
+| Telnet | 23 | generic telnetd fingerprint, then a BusyBox v1.19.4 shell backed by a virtual camera filesystem: `ls`/`cat /etc/passwd`/`ps` (boa, rtspd)/`uname -a` (Linux 2.6.31.8, armv5tejl)/`ifconfig`/`netstat`/`busybox` applet list, `wget`/`ping`/`reboot` attempts logged, unknown commands get `sh: x: not found` (Cowrie-lite) |
 
 Classic exploit endpoints are emulated against the shared virtual shell
 (`src/vsh.ts`) — injected commands are logged, never executed:
@@ -52,15 +53,14 @@ garbage) are captured: method, raw target, headers, body, extracted creds.
 
 ## Run it
 
+Defaults are the standard camera ports (HTTP 80, RTSP 554, telnet 23) — on
+macOS, binding those needs sudo:
+
 ```sh
 bun install
-bun run start
-```
-
-To mirror the real device 1:1 (ports 80/554 need root):
-
-```sh
-sudo env HTTP_PORT=80 RTSP_PORT=554 $(which bun) src/index.ts
+sudo bun run start          # 1:1 camera ports
+# or, for testing without sudo:
+HTTP_PORT=8080 RTSP_PORT=8554 TELNET_PORT=2323 bun run start
 ```
 
 `nmap -sV <your-ip>` should then produce the exact output shown above.

@@ -33,12 +33,12 @@ systemctl enable --now ipcam-honeypot
 
 echo "waiting for the honeypot to come up..."
 for i in $(seq 1 20); do
-  if ss -lnt | grep -q ':8080'; then
+  if ss -lnt | grep -q ':80 '; then
     echo "ipcam-honeypot is running:"
-    ss -lnt | grep -E ':(8080|8554|2323)'
+    ss -lnt | grep -E ':(80|554|23)\s'
     exit 0
   fi
   sleep 1
 done
-echo "service did not open port 8080 — check: journalctl -u ipcam-honeypot -e" >&2
+echo "service did not open port 80 — check: journalctl -u ipcam-honeypot -e" >&2
 exit 1
