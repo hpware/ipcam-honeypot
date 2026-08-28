@@ -79,10 +79,10 @@ for id in $(seq 210 240); do
   if ! pct status "$id" >/dev/null 2>&1; then SUGGESTED=$id; break; fi
 done
 ask CTID "Container ID" "$SUGGESTED"
-pct status "$CTID" >/dev/null 2>&1 && {
-  echo "error: CT $CTID already exists — pick another ID" >&2
-  exit 1
-}
+if pct status "$CTID" >/dev/null 2>&1; then
+  ask_yn REUSE "CT $CTID already exists — reuse it and re-provision?" y
+  [ "$REUSE" = 1 ] || { echo "aborted."; exit 1; }
+fi
 ask HOSTNAME "Hostname" ipcam-honeypot
 ask MEMORY "Memory (MB)" 512
 ask CORES "CPU cores" 1

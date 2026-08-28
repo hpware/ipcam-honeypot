@@ -47,6 +47,13 @@ TEMPLATE_STORE=${TEMPLATE_STORE:-local}
 
 cd "$(dirname "$0")/.."
 
+# host architecture decides both the template and the bun binary
+case "$(uname -m)" in
+  x86_64) PKGARCH=amd64; BUNARCH=x64 ;;
+  aarch64) PKGARCH=arm64; BUNARCH=arm64 ;;
+  *) echo "error: unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
 if ! pct status "$CTID" >/dev/null 2>&1; then
   pveam update >/dev/null
   if [ -n "$TEMPLATE" ]; then
@@ -56,11 +63,6 @@ if ! pct status "$CTID" >/dev/null 2>&1; then
     fi
   else
     # auto: newest standard template matching this host's architecture
-    case "$(uname -m)" in
-      x86_64) PKGARCH=amd64 ;;
-      aarch64) PKGARCH=arm64 ;;
-      *) echo "error: unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-    esac
     TEMPLATE=$(pveam available | awk '{print $NF}' | grep -E "^debian-1[23]-standard_.*_${PKGARCH}\.tar\.zst$" | sort -V | tail -1)
     [ -n "$TEMPLATE" ] || { echo "error: no debian-1x-standard ${PKGARCH} template found in pveam available" >&2; exit 1; }
     if ! pveam list "$TEMPLATE_STORE" | grep -q "$TEMPLATE"; then
@@ -101,16 +103,42 @@ fi
 pct set "$CTID" --features nesting=1 >/dev/null 2>&1 || true
 pct start "$CTID" >/dev/null 2>&1 || true
 
-echo "waiting for network..."
-for i in $(seq 1 60); do
-  pct exec "$CTID" -- cat /proc/net/route >/dev/null 2>&1 && break
+# The CT may live on an isolated VLAN with no internet — everything it needs
+# is fetched on the HOST and pushed in.
+echo "==> fetching bun (host-side; the CT needs no internet)"
+BUN_VERSION=${BUN_VERSION:-1.2.20}
+BUN_ZIP=${BUN_ZIP:-/tmp/bun-linux-${BUNARCH}.zip}
+if [ ! -f "$BUN_ZIP" ]; then
+  curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${BUNARCH}.zip" -o "$BUN_ZIP"
+fi
+if ! command -v unzip >/dev/null 2>&1; then
+  apt-get install -y unzip >/dev/null    # host-side only; the CT stays offline
+fi
+rm -rf /tmp/bun-extract && mkdir -p /tmp/bun-extract
+unzip -q -o "$BUN_ZIP" -d /tmp/bun-extract
+BUN_BIN=$(find /tmp/bun-extract -type f -name bun | head -1)
+[ -n "$BUN_BIN" ] || { echo "error: bun binary not found in $BUN_ZIP" >&2; exit 1; }
+
+echo "==> waiting for an IPv4 address on eth0 (30s, not fatal)"
+NET_OK=0
+for i in $(seq 1 30); do
+  if pct exec "$CTID" -- sh -c "ip -4 addr show dev eth0 2>/dev/null | grep -q 'inet '" 2>/dev/null; then
+    NET_OK=1
+    break
+  fi
   sleep 1
 done
+if [ "$NET_OK" != 1 ]; then
+  echo "warn: no IPv4 on eth0 — the CT has no IP (no DHCP on this bridge/VLAN?)." >&2
+  echo "      provisioning continues, but the honeypot is unreachable until the" >&2
+  echo "      CT gets an address (re-run the installer and choose a static IP)." >&2
+fi
 
-echo "copying app..."
+echo "==> copying app..."
 pct exec "$CTID" -- mkdir -p /opt/provision
 tar cf - src package.json .env.example \
   | pct exec "$CTID" -- tar xf - -C /opt/provision
+pct push "$CTID" "$BUN_BIN" /opt/provision/bun
 pct push "$CTID" lxc/setup-inside-ct.sh /root/setup.sh
 pct push "$CTID" lxc/ipcam-honeypot.service /root/ipcam-honeypot.service
 

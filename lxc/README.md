@@ -1,8 +1,10 @@
 # LXC deployment (Proxmox VE)
 
 Runs the honeypot as an **unprivileged Debian 12/13 LXC** with a hardened
-systemd unit. The app has zero npm dependencies, so provisioning only needs
-the Bun binary plus `src/`.
+systemd unit. The app has zero npm dependencies. **The CT itself needs no
+internet** — Bun and the app files are downloaded on the Proxmox host and
+pushed in — so the CT can live on an isolated VLAN with no outbound access
+(the ideal honeypot setup). No apt packages are installed inside the CT.
 
 ## One-shot from the Proxmox host (guided)
 
