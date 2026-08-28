@@ -38,7 +38,10 @@ if ! pct status "$CTID" >/dev/null 2>&1; then
     fi
   fi
   echo "==> using template: $TEMPLATE"
-  NET="name=eth0,bridge=${BRIDGE},ip=dhcp$( [ -n "$VLAN" ] && echo ",tag=${VLAN}" )"
+  NET="name=eth0,bridge=${BRIDGE},ip=dhcp"
+  if [ -n "$VLAN" ]; then
+    NET="${NET},tag=${VLAN}"
+  fi
   pct create "$CTID" "${TEMPLATE_STORE}:vztmpl/${TEMPLATE}" \
     --hostname "$HOSTNAME" \
     --unprivileged 1 \
@@ -65,7 +68,7 @@ pct push "$CTID" lxc/ipcam-honeypot.service /root/ipcam-honeypot.service
 echo "provisioning..."
 pct exec "$CTID" -- bash /root/setup.sh
 
-IP=$(pct exec "$CTID" -- sh -c "ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+)+'")
+IP=$(pct exec "$CTID" -- sh -c "ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+)+'" || true)
 echo
 echo "honeypot CT $CTID is up: http://$IP  rtsp://$IP:554  telnet://$IP"
 echo "logs: pct exec $CTID -- journalctl -u ipcam-honeypot -f"
