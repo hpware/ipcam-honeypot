@@ -8,8 +8,14 @@ APP_USER=honeypot
 BUN_VERSION=${BUN_VERSION:-1.2.20}
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq ca-certificates curl unzip iproute2
+# repair any half-finished package state, then refresh indexes before installing
+dpkg --configure -a >/dev/null 2>&1 || true
+apt-get update
+PKGS="ca-certificates curl unzip iproute2"
+apt-get install -y --no-install-recommends $PKGS \
+  || { echo "apt failed once — fixing dependencies and retrying..." >&2
+       apt-get -f install -y
+       apt-get install -y --no-install-recommends $PKGS; }
 
 if [ ! -x /usr/local/bin/bun ]; then
   curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip" -o /tmp/bun.zip
@@ -24,21 +30,32 @@ id "$APP_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell
 mkdir -p "$APP_DIR"
 cp -a /opt/provision/src /opt/provision/package.json "$APP_DIR/"
 cp -a /opt/provision/.env.example "$APP_DIR/.env"
-[ -f "$APP_DIR/.env.local" ] || cp -a "$APP_DIR/.env" "$APP_DIR/.env.local"
+if [ -f /opt/provision/.env.local ]; then
+  # settings chosen by the installer (ports, Loki URL, ...)
+  cp -a /opt/provision/.env.local "$APP_DIR/.env.local"
+elif [ ! -f "$APP_DIR/.env.local" ]; then
+  cp -a "$APP_DIR/.env" "$APP_DIR/.env.local"
+fi
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 install -m 644 /root/ipcam-honeypot.service /etc/systemd/system/ipcam-honeypot.service
 systemctl daemon-reload
 systemctl enable --now ipcam-honeypot
 
+HTTP_PORT=80
+if [ -f "$APP_DIR/.env.local" ]; then
+  HTTP_PORT=$(grep -E '^HTTP_PORT=' "$APP_DIR/.env.local" | cut -d= -f2 || true)
+  HTTP_PORT=${HTTP_PORT:-80}
+fi
+
 echo "waiting for the honeypot to come up..."
 for i in $(seq 1 20); do
-  if ss -lnt | grep -q ':80 '; then
+  if ss -lnt | grep -q ":${HTTP_PORT} "; then
     echo "ipcam-honeypot is running:"
-    ss -lnt | grep -E ':(80|554|23)\s'
+    ss -lnt
     exit 0
   fi
   sleep 1
 done
-echo "service did not open port 80 — check: journalctl -u ipcam-honeypot -e" >&2
+echo "service did not open port ${HTTP_PORT} — check: journalctl -u ipcam-honeypot -e" >&2
 exit 1

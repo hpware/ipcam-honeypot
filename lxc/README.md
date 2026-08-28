@@ -1,29 +1,39 @@
 # LXC deployment (Proxmox VE)
 
-Runs the honeypot as an **unprivileged Debian 12 LXC** with a hardened systemd
-unit. The app has zero npm dependencies, so provisioning only needs the Bun
-binary plus `src/`.
+Runs the honeypot as an **unprivileged Debian 12/13 LXC** with a hardened
+systemd unit. The app has zero npm dependencies, so provisioning only needs
+the Bun binary plus `src/`.
 
-## One-shot from the Proxmox host
+## One-shot from the Proxmox host (guided)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh | bash
 ```
 
-Customize by attaching variables to `bash` (not `curl` — vars before `curl`
-land in curl's environment, not the installer's):
+You'll be walked through everything with sensible defaults: container ID,
+resources, storage, bridge, VLAN, DHCP vs static IP, PVE firewall, camera
+ports, and where to ship logs (Loki URL). Prompts are read from `/dev/tty`,
+so the curl-piped form works interactively. Nothing happens until you confirm
+the summary.
+
+Pre-seed answers via env vars attached to `bash` (they become the pre-filled
+defaults — attach them to `bash`, not `curl`):
 
 ```sh
-# VLAN 50, static IP, PVE firewall on the NIC
 curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh \
-  | CTID=210 VLAN=50 IP=192.168.50.20/24 GW=192.168.50.1 FIREWALL=1 bash
-
-# bigger CT with tags and a DNS server
-curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh \
-  | CTID=211 CORES=2 MEMORY=1024 TAGS=honey,cam DNS=1.1.1.1 bash
+  | CTID=210 VLAN=50 bash
 ```
 
-Or from a local checkout: `CTID=210 VLAN=50 bash lxc/create-on-proxmox-host.sh`.
+Fully non-interactive (CI / scripts) — skips all prompts, uses env vars or
+defaults:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh \
+  | NONINTERACTIVE=1 CTID=210 IP=192.168.50.20/24 GW=192.168.50.1 bash
+```
+
+Or from a local checkout: `bash lxc/install.sh` (guided) or
+`NONINTERACTIVE=1 CTID=210 VLAN=50 bash lxc/create-on-proxmox-host.sh` (direct).
 
 ## All container settings
 

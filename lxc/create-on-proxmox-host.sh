@@ -114,6 +114,15 @@ tar cf - src package.json .env.example \
 pct push "$CTID" lxc/setup-inside-ct.sh /root/setup.sh
 pct push "$CTID" lxc/ipcam-honeypot.service /root/ipcam-honeypot.service
 
+# app-level settings chosen by the installer (written before setup runs)
+APPENV=""
+for v in HTTP_PORT RTSP_PORT TELNET_PORT BIND_HOST LOKI_URL LOKI_TENANT_ID; do
+  if [ -n "${!v:-}" ]; then APPENV+="${v}=${!v}"$'\n'; fi
+done
+if [ -n "$APPENV" ]; then
+  printf '%s' "$APPENV" | pct exec "$CTID" -- sh -c 'cat > /opt/provision/.env.local'
+fi
+
 echo "provisioning..."
 pct exec "$CTID" -- bash /root/setup.sh
 
