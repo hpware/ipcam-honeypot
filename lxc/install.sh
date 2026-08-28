@@ -11,14 +11,20 @@ set -euo pipefail
 REPO=${REPO:-hpware/ipcam-honeypot}
 BRANCH=${BRANCH:-main}
 
+echo "==> ipcam-honeypot LXC installer v2"
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "error: run as root on the Proxmox VE host" >&2
   exit 1
 fi
-if [ ! -d /etc/pve ] || ! command -v pct >/dev/null 2>&1 || ! command -v pveam >/dev/null 2>&1; then
-  echo "error: pct/pveam not found — this must run on a Proxmox VE host, not inside a CT/VM" >&2
+if [ ! -d /etc/pve ] || ! command -v pct >/dev/null 2>&1; then
+  echo "error: pct not found — this must run on a Proxmox VE host, not inside a CT/VM" >&2
   exit 1
 fi
+command -v pveam >/dev/null 2>&1 || {
+  echo "error: pveam not found — is pve-manager installed on this host?" >&2
+  exit 1
+}
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
