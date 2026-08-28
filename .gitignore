@@ -2,3 +2,6 @@ node_modules/
 logs/
 .env
 *.jpg.tmp
+
+# real firmware web root (proprietary, regenerate with scripts/fetch-www.sh)
+assets/www/

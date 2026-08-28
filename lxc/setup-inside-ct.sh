@@ -13,6 +13,7 @@ id "$APP_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell
 
 mkdir -p "$APP_DIR"
 cp -a /opt/provision/src /opt/provision/package.json "$APP_DIR/"
+[ -d /opt/provision/assets ] && cp -a /opt/provision/assets "$APP_DIR/"
 cp -a /opt/provision/.env.example "$APP_DIR/.env"
 if [ -f /opt/provision/.env.local ]; then
   # settings chosen by the installer (ports, Loki URL, ...)

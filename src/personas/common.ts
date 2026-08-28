@@ -151,3 +151,42 @@ export function mjpegStream(
     },
   };
 }
+
+// --- real firmware www (extracted from the official 1.20.00 image, see
+// scripts/fetch-www.sh) served verbatim for maximum fidelity ---
+
+const WWW_TYPES: Record<string, string> = {
+  html: "text/html",
+  htm: "text/html",
+  js: "application/x-javascript",
+  css: "text/css",
+  gif: "image/gif",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  ico: "image/x-icon",
+  txt: "text/plain",
+  ini: "text/plain",
+  xml: "text/xml",
+  cab: "application/octet-stream",
+  exe: "application/octet-stream",
+};
+
+export async function wwwFile(pathname: string): Promise<HttpResult | null> {
+  let p = pathname;
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    return null;
+  }
+  if (p.endsWith("/")) p += "index.htm";
+  if (p.includes("..") || p.includes("\0")) return null;
+  const f = Bun.file("assets/www" + p);
+  if (!(await f.exists())) return null;
+  const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
+  return {
+    status: 200,
+    headers: { "Content-type": WWW_TYPES[ext] ?? "application/octet-stream" },
+    body: new Uint8Array(await f.arrayBuffer()),
+  };
+}

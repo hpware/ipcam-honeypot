@@ -136,7 +136,9 @@ fi
 
 echo "==> copying app..."
 pct exec "$CTID" -- mkdir -p /opt/provision
-tar cf - src package.json .env.example \
+TARPATHS="src package.json .env.example"
+[ -d assets/www ] && TARPATHS="$TARPATHS assets/www"   # real firmware UI (scripts/fetch-www.sh)
+tar cf - $TARPATHS \
   | pct exec "$CTID" -- tar xf - -C /opt/provision
 pct push "$CTID" "$BUN_BIN" /opt/provision/bun
 pct push "$CTID" lxc/setup-inside-ct.sh /root/setup.sh

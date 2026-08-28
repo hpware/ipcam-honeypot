@@ -9,6 +9,7 @@ import {
   notFound,
   redirect,
   unauthorized,
+  wwwFile,
 } from "./common";
 import { currentFrame } from "../framegen";
 import { runCommandLine } from "../vsh";
@@ -31,51 +32,9 @@ function wapSession(ctx: PersonaCtx): boolean {
 
 function handleGet(ctx: PersonaCtx, url: URL): HttpResult {
   switch (url.pathname) {
-    case "/":
-    case "/index.html":
-      // Byte-accurate copy of the index served by live reference devices
-      // on this firmware: an empty XHTML page whose only job is an IE sniff
-      // and a redirect to ie.htm / wap.htm.
-      return html(persona, `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN">
-<html>
-	<head>
-		<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
-		<title>
-			</title>
-	</head>
-
-   <SCRIPT LANGUAGE="JavaSCRIPT">
-   function msieversion()
-   {
-      var ua = window.navigator.userAgent;
-      var msie = ua.indexOf ( "MSIE " );
-
-      if ( msie > 0 )      // If Internet Explorer, return version number
-         return parseInt (ua.substring (msie+5, ua.indexOf (".", msie )));
-      else {
-         // IE11 remove string "MSIE" in userAgent
-         if (window.ActiveXObject !== undefined)
-            return 11;
-         else              // If another browser, return 0
-            return 0;
-      }
-
-   }
-   </SCRIPT>
-
-  <SCRIPT LANGUAGE="javascript">
-   if ( msieversion() >= 3 )
-      window.location = 'ie.htm';
-   else
-      window.location = 'wap.htm';
-     //document.write ( "This is another browser" );
-
-   </SCRIPT>
-
-	<body>
-
-	</body>
-</html>`);
+    // NOTE: "/" and "/index.html" are NOT listed here on purpose — the real
+    // firmware's own index.htm (assets/www) is served via the wwwFile
+    // fallback below, exactly as the 1.20.00 image ships it.
 
     case "/wap.htm":
       // Byte-accurate copy of the reference devices' login menu. The form
@@ -418,8 +377,12 @@ export const persona: Persona = {
   name: "dlink",
   serverHeader: SERVER,
   realm: REALM,
-  handle(ctx) {
+  async handle(ctx) {
     if (ctx.method === "POST") return handlePost(ctx, ctx.url);
-    return handleGet(ctx, ctx.url);
+    const hit = handleGet(ctx, ctx.url);
+    if (hit.status !== 404) return hit;
+    // anything not explicitly modeled is answered from the real firmware's
+    // web root (assets/www — extracted from the official 1.20.00 image)
+    return (await wwwFile(ctx.url.pathname)) ?? hit;
   },
 };
