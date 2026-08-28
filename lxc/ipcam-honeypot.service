@@ -1,0 +1,36 @@
+[Unit]
+Description=IP camera honeypot (D-Link DCS-2130 / Pelco IDE10DN)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=honeypot
+Group=honeypot
+WorkingDirectory=/opt/ipcam-honeypot
+ExecStart=/usr/local/bin/bun run src/index.ts
+Restart=always
+RestartSec=5
+
+# Hardening: honeypot faces the internet, so keep it boxed in even if bun
+# itself were compromised. Attacker input never reaches the fs/exec layer,
+# but defense in depth is free.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ReadWritePaths=/opt/ipcam-honeypot/logs
+
+[Install]
+WantedBy=multi-user.target

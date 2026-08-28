@@ -1,0 +1,16 @@
+{
+  "name": "ipcam-honeypot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "gen:assets": "bun scripts/gen-assets.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.0"
+  }
+}
