@@ -24,8 +24,11 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 install -m 755 /opt/provision/bun /usr/local/bin/bun
 install -m 644 /root/ipcam-honeypot.service /etc/systemd/system/ipcam-honeypot.service
+mkdir -p "$APP_DIR/logs"
+chown "$APP_USER:$APP_USER" "$APP_DIR/logs"
 systemctl daemon-reload
-systemctl enable --now ipcam-honeypot
+systemctl enable ipcam-honeypot >/dev/null
+systemctl restart ipcam-honeypot
 
 HTTP_PORT=80
 if [ -f "$APP_DIR/.env.local" ]; then

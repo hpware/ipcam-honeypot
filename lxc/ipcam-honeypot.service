@@ -27,12 +27,13 @@ RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
+# NOTE: no MemoryDenyWriteExecute here — bun's JavaScriptCore JIT requires
+# W+X memory mappings and would crash instantly with it enabled.
 # standard camera ports (80/554) need binding as an unprivileged user
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-ReadWritePaths=/opt/ipcam-honeypot/logs
+ReadWritePaths=-/opt/ipcam-honeypot/logs
 
 [Install]
 WantedBy=multi-user.target
