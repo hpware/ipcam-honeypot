@@ -100,17 +100,18 @@ function safeUrl(target: string): { url: URL; weird: boolean } {
 async function dispatch(
   socket: Socket<HttpSession>,
   req: ParsedRequest,
+  body: string,
   src: { address: string; port: number },
   personas: Persona[],
 ): Promise<void> {
   const { url, weird } = safeUrl(req.target);
-  const body = req.contentLength > 0 ? socket.data.buf.slice(req.headEnd, req.headEnd + req.contentLength) : "";
   const ctx: PersonaCtx = {
     method: req.method,
     url,
     body,
     authorization: req.headers["authorization"],
     contentType: req.headers["content-type"],
+    cookie: req.headers["cookie"],
   };
 
   let result: HttpResult | undefined;
@@ -235,6 +236,7 @@ function handleData(socket: Socket<HttpSession>, chunk: Uint8Array, src: { addre
     respondError(socket, 400);
     return;
   }
+  const rawBody = parsed.contentLength > 0 ? s.buf.slice(parsed.headEnd, parsed.headEnd + parsed.contentLength) : "";
   s.buf = s.buf.slice(parsed.headEnd + parsed.contentLength);
 
   if (parsed.method !== "GET" && parsed.method !== "POST" && parsed.method !== "HEAD") {
@@ -252,7 +254,7 @@ function handleData(socket: Socket<HttpSession>, chunk: Uint8Array, src: { addre
     respondError(socket, 501, parsed.method);
     return;
   }
-  void dispatch(socket, parsed, src, personas);
+  void dispatch(socket, parsed, rawBody, src, personas);
 }
 
 export function startHttp(personas: Persona[], port: number): void {

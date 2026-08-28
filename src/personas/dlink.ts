@@ -13,38 +13,207 @@ import {
 import { currentFrame } from "../framegen";
 import { runCommandLine } from "../vsh";
 
-// D-Link DCS-2130 web UI, as served by Boa HTTPd 0.94.14rc21 on the real device.
+// DCS-2130 / Pelco IDE10DN OEM web UI (Boa HTTPd 0.94.14rc21).
+//
+// The official 1.20.00 firmware image from D-Link is fully AES-encrypted
+// (~7.96 entropy, no plaintext sections), so the UI here is mirrored from
+// live reference devices running the same firmware family (identical Boa
+// build, identical rtspd banner): the IE-sniffer index, the wap.htm login
+// (POST /cgi-bin/wappwd -> camera.htm / denied.htm) and the ActiveX ie.htm
+// are byte-accurate where the devices serve them publicly. camera.htm is
+// behind the real device's auth, so it is modeled in the same bare style.
 export const SERVER = "Boa/0.94.14rc21";
 const REALM = "DCS-2130";
 
-const page = (title: string, body: string) => `<!DOCTYPE html>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>${title}</title>
-<style type="text/css">
-body { font: 12px Verdana, Arial, sans-serif; background:#ffffff; margin:0; }
-#header { background:#1a5276; color:#fff; padding:8px 12px; font-weight:bold; }
-#nav { background:#d6eaf8; padding:4px 12px; border-bottom:1px solid #aaa; }
-#nav a { color:#1a5276; margin-right:14px; text-decoration:none; }
-#content { padding:14px; }
-#footer { margin-top:24px; padding:6px 12px; border-top:1px solid #aaa; color:#555; font-size:11px; }
-table.f { border-collapse:collapse; }
-table.f td { border:1px solid #999; padding:3px 8px; }
-</style>
-</head>
-<body>
-<div id="header">D-Link&nbsp;|&nbsp;DCS-2130 HD Wireless N Network Camera</div>
-<div id="nav"><a href="/live.html">Live Video</a><a href="/setup/system.html">Setup</a><a href="/logout.html">Logout</a></div>
-<div id="content">
-${body}
-</div>
-<div id="footer">DCS-2130 A1&nbsp;&nbsp;|&nbsp;&nbsp;Firmware Version: 1.23.00&nbsp;&nbsp;|&nbsp;&nbsp;Copyright D-Link Corporation</div>
-</body>
-</html>`;
+function wapSession(ctx: PersonaCtx): boolean {
+  return /(?:^|;[ \t]*)WAPSID=[0-9a-f]{8}(?:;|$)/.test(ctx.cookie ?? "");
+}
 
 function handleGet(ctx: PersonaCtx, url: URL): HttpResult {
   switch (url.pathname) {
+    case "/":
+    case "/index.html":
+      // Byte-accurate copy of the index served by live reference devices
+      // on this firmware: an empty XHTML page whose only job is an IE sniff
+      // and a redirect to ie.htm / wap.htm.
+      return html(persona, `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN">
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+		<title>
+			</title>
+	</head>
+
+   <SCRIPT LANGUAGE="JavaSCRIPT">
+   function msieversion()
+   {
+      var ua = window.navigator.userAgent;
+      var msie = ua.indexOf ( "MSIE " );
+
+      if ( msie > 0 )      // If Internet Explorer, return version number
+         return parseInt (ua.substring (msie+5, ua.indexOf (".", msie )));
+      else {
+         // IE11 remove string "MSIE" in userAgent
+         if (window.ActiveXObject !== undefined)
+            return 11;
+         else              // If another browser, return 0
+            return 0;
+      }
+
+   }
+   </SCRIPT>
+
+  <SCRIPT LANGUAGE="javascript">
+   if ( msieversion() >= 3 )
+      window.location = 'ie.htm';
+   else
+      window.location = 'wap.htm';
+     //document.write ( "This is another browser" );
+
+   </SCRIPT>
+
+	<body>
+
+	</body>
+</html>`);
+
+    case "/wap.htm":
+      // Byte-accurate copy of the reference devices' login menu. The form
+      // posts to /cgi-bin/wappwd with FILEOK=camera.htm / FILEFAIL=denied.htm.
+      return html(persona, `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html">
+<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+<title>LOGIN MENU</title>
+</head>
+<body bgcolor="#ffffff" text="#000000" link="#ff3535">
+<form name="form1" method="post" action="/cgi-bin/wappwd">
+<table border="1" cellpadding="0" bgcolor="#C0C0C0">
+	<tbody>
+		<tr>
+			<th align=left><FONT color=#000000 size=1>ID:</FONT></TH>
+			<td align=left><input name="WAPLOGIN" size="8" maxlength="14" ></TD>
+		</tr>
+		<tr>
+			<th align=left><FONT color=#000000 size=1>PSWD:</FONT></TH>
+			<td align=left>
+			<input type="password" name="WAPPASSWORD" size="8" maxlength="14"></TD>
+		</tr>
+		<tr>
+			<th align=left><FONT color=#000000 size=1>PIC Size :</FONT></TH>
+			<td align=left>
+			<input type="radio" checked="checked" name="PIC_SIZE" value="RES_0">
+			<FONT color=#000000 size=1>176X144<br></FONT>
+			<input type="radio" name="PIC_SIZE" value="RES_1">
+			<FONT color=#000000 size=1>228X187<br></FONT>
+			<input type="radio" name="PIC_SIZE" value="RES_2">
+			<FONT color=#000000 size=1>320X240<br></FONT>
+			<input type="radio" name="PIC_SIZE" value="RES_3">
+			<FONT color=#000000 size=1>640X480</FONT></td>
+      </td>
+    	</tr>
+		<tr>
+			<th align=left><FONT color=#000000 size=1> </FONT></TH>
+			<td align=left>
+			<input type=hidden name=FILEOK value=camera.htm>
+			<input type=hidden name=FILEFAIL value=denied.htm>
+			<input type="submit" name="Submit" value="OK"></td>
+		</tr>
+	</tbody>
+</table>
+</form>
+<hr>
+</body>
+</html>`);
+
+    case "/ie.htm":
+      // Byte-accurate copy of the reference devices' IE gatekeeper page.
+      return html(persona, `<html>
+
+<head>
+<meta name="GENERATOR" content="Microsoft FrontPage 6.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>IE-Plugin</title>
+</head>
+
+<body bgcolor="#ffffff">
+
+<p align="center">
+<table>
+	<tr>
+		<td align="center">
+			<object classid="clsid:62A7FE9E-A494-49f4-BE78-E4C340B75BF4" id="IE_OCX" width="1" height="1"
+				CODEBASE="IEPlugin.cab#version=7,0,2,8">
+				<param name="_Version" value="65536">
+				<param name="_ExtentX" value="25929">
+				<param name="_ExtentY" value="16404">
+				<param name="_StockProps" value="0">
+			</object>
+		</td>
+	</tr>
+	<tr>
+		<td align="center" id="downloadDescription">
+            <font size="5">If you connect to the DVR at the first time, you need to install the IE-Plugin first.<br />
+            Please download the manual <a href="" onclick="OnDownload();return false;">package</a>,
+			run 'setup.exe' as administrator, and login to the DVR again.<br />
+            For Google Maps function, you need IE version 11 above.</font>
+		</td>
+	</tr>
+</table>
+</p>
+
+<script language="JavaScript">
+	var SvrIP;
+	SvrIP = document.location.hostname;
+	IE_OCX.setText(0, 0, "Please click in this window before any operation in Login Dialog!");
+IE_OCX.SetIPAddrEx(SvrIP, 2);
+
+	function OCXSizeChange(width, height) {
+		IE_OCX.width = width;
+		IE_OCX.height = height;
+	}
+	function DownloadDescriptionHide() {
+		document.getElementById("downloadDescription").style.visibility='hidden';
+	}
+	function OnDownload() {
+		window.open('Setup.exe', '_blank');
+		var url = location.href;
+		url = url.substring(0, url.lastIndexOf("/"));
+		location.href = url + "/IEPlugin.cab";
+	}
+	function BackgroundColorChange(color) {
+		document.body.bgColor = color;
+	}
+</script>
+
+</body>
+</html>`);
+
+    case "/camera.htm": {
+      // Modeled post-login video page (the real one is behind auth). Same
+      // bare wap-family styling; requires a wap session or Basic auth.
+      if (!wapSession(ctx)) {
+        const auth = credsFrom(ctx, url);
+        if (!auth) return redirect(persona, "/wap.htm");
+        return videoPage();
+      }
+      return videoPage();
+    }
+
+    case "/denied.htm":
+      return html(persona, `<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html">
+<title>DENIED</title>
+</head>
+<body bgcolor="#ffffff" text="#000000">
+<FONT color=#000000 size=2>Access denied.</FONT>
+<hr>
+</body>
+</html>`);
+
     case "/cgi-bin/rtpd.cgi": {
       // CVE-2013-1599 emulation (Core Security CORE-2013-0303): the real
       // rtpd.cgi evals QUERY_STRING after turning `&` into spaces, so
@@ -68,8 +237,7 @@ function handleGet(ctx: PersonaCtx, url: URL): HttpResult {
     case "/frame/GetConfig.cgi": {
       // Unauth config disclosure (DCS-930L/932L family, Paleari 2013): the real
       // device serves an obfuscated config blob containing the admin password.
-      // Ours is XOR-0x85 "obfuscated" and seeded with honeycreds — anything the
-      // attacker reuses shows up (and correlates) in later login attempts.
+      // Blob matches the real device defaults: admin with a BLANK password.
       return {
         status: 200,
         headers: { "Content-type": "application/octet-stream", "Cache-Control": "no-cache" },
@@ -116,107 +284,90 @@ function handleGet(ctx: PersonaCtx, url: URL): HttpResult {
       };
     }
 
-
-    case "/":
-    case "/index.html":
-      return html(persona, page("DCS-2130 Login", `
-<h3>Web Configuration Utility</h3>
-<form method="POST" action="/login.cgi">
-<table class="f">
-<tr><td>Username:</td><td><input type="text" name="username" size="16" /></td></tr>
-<tr><td>Password:</td><td><input type="password" name="password" size="16" /></td></tr>
-<tr><td colspan="2" align="right"><input type="submit" value="Login" /></td></tr>
-</table>
-</form>`));
-
-    case "/live.html":
-      return html(persona, page("DCS-2130 Live Video", `
-<h3>Live Video</h3>
-<img src="/video/mjpg.cgi" width="640" height="360" alt="Live Video" />
-<p>
-<a href="/image/jpeg.cgi?profileid=1">Take a Snapshot</a> |
-<a href="/setup/video.html">Video Setup</a> |
-<a href="/setup/motion.html">Motion Detection</a>
-</p>
-<p>ActiveX controls required for audio. <a href="/dms?nowprofileid=2">Stream profile 2</a></p>`));
-
-    case "/setup/system.html":
-      return html(persona, page("DCS-2130 System Setup", `
-<h3>System Setup</h3>
-<table class="f">
-<tr><td>Device Name</td><td>DCS-2130</td></tr>
-<tr><td>Firmware Version</td><td>1.23.00</td></tr>
-<tr><td>MAC Address</td><td>00:1c:f0:aa:bb:cc</td></tr>
-<tr><td>Current Date/Time</td><td><script>document.write(new Date())</script></td></tr>
-</table>
-<p><a href="/setup/network.html">Network Setup</a></p>`));
-
-    case "/setup/network.html":
-      return html(persona, page("DCS-2130 Network Setup", `
-<h3>Network Setup</h3>
-<table class="f">
-<tr><td>IP Address</td><td>192.168.0.20</td></tr>
-<tr><td>Subnet Mask</td><td>255.255.255.0</td></tr>
-<tr><td>Default Gateway</td><td>192.168.0.1</td></tr>
-<tr><td>HTTP Port</td><td>80</td></tr>
-<tr><td>RTSP Port</td><td>554</td></tr>
-<tr><td>DDNS</td><td>Enabled (mycamera.dlinkddns.com)</td></tr>
-</table>`));
-
-    case "/logout.html":
-      return html(persona, page("DCS-2130 Logout", "<p>You have been logged out. <a href=\"/\">Login again</a></p>"));
-
     case "/image/jpeg.cgi":
     case "/image/jpeg.cgi/":
     case "/dms.jpg":
     case "/snapshot.jpg": {
+      const wap = wapSession(ctx);
       const auth = credsFrom(ctx, url);
-      if (!auth) return unauthorized(persona);
-      return { ...jpeg(persona, currentFrame(1280, 720)), auth, note: "snapshot" };
+      if (!wap && !auth) return unauthorized(persona);
+      return {
+        ...jpeg(persona, currentFrame(1280, 720)),
+        auth,
+        note: wap ? "snapshot (wap session)" : "snapshot",
+      };
     }
 
     case "/video/mjpg.cgi":
     case "/video.cgi":
     case "/dms":
     case "/ipcam/stream.cgi": {
+      const wap = wapSession(ctx);
       const auth = credsFrom(ctx, url);
-      if (!auth) return unauthorized(persona);
-      return { ...mjpegStream(persona, () => currentFrame(640, 360), { fps: 3 }), auth, note: "mjpeg stream" };
+      if (!wap && !auth) return unauthorized(persona);
+      return {
+        ...mjpegStream(persona, () => currentFrame(640, 360), { fps: 3 }),
+        auth,
+        note: wap ? "mjpeg stream (wap session)" : "mjpeg stream",
+      };
     }
 
     default:
       return notFound(persona, url);
   }
+}
+
+function videoPage(): HttpResult {
+  return html(persona, `<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html">
+<title>CAMERA</title>
+</head>
+<body bgcolor="#ffffff" text="#000000" link="#ff3535">
+<table border="1" cellpadding="0" bgcolor="#C0C0C0">
+<tr><td>
+<img src="/video/mjpg.cgi" width="320" height="240" border="0">
+</td></tr>
+</table>
+<br>
+<FONT color=#000000 size=1>[<a href="/image/jpeg.cgi?profileid=1">Snapshot</a>]
+[<a href="/wap.htm">Logout</a>]</FONT>
+<hr>
+</body>
+</html>`);
 }
 
 function handlePost(ctx: PersonaCtx, url: URL): HttpResult {
   switch (url.pathname) {
+    case "/cgi-bin/wappwd":
     case "/login.cgi": {
+      // Real flow: FILEOK=camera.htm on success, FILEFAIL=denied.htm on
+      // failure. Device ships with admin + BLANK password, so any non-empty
+      // ID gets in; a fully empty submission is denied. All of it is logged.
       const auth = credsFrom(ctx, url) ?? { kind: "form" as const };
+      const ok = !!auth.user;
+      const sid = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
       return {
-        ...redirect(persona, "/live.html", `sid=${crypto.randomUUID().replace(/-/g, "")}; path=/`),
+        ...redirect(persona, ok ? "/camera.htm" : "/denied.htm", `WAPSID=${sid}; path=/`),
         auth,
-        note: "web login",
+        note: ok ? "wap login" : "wap login denied (empty creds)",
       };
     }
-    case "/setup/apply.cgi":
-    case "/config.cgi":
-      return { ...html(persona, "<p>Settings applied.</p>"), note: "config change attempt" };
     default:
       return notFound(persona, url);
   }
 }
 
-const CONFIG_TEXT = `#DCS-2130 config v1.23.00
+const CONFIG_TEXT = `#DCS-2130 config v1.20.00
 AdminUserID=admin
-AdminPasswd=admin1234
+AdminPasswd=
 CameraName=DCS-2130
 HttpPort=80
 RtspPort=554
-WirelessSSID=home-net
-WirelessKey=abcde-12345
+WirelessSSID=
+WirelessKey=
 NtpServer=time.nist.gov
-DdnsHost=mycamera.dlinkddns.com
+DdnsHost=
 `;
 
 /** Trivial byte obfuscation, same spirit as the real GetConfig blob. */

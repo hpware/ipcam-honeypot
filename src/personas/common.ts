@@ -6,6 +6,7 @@ export interface PersonaCtx {
   body: string;
   authorization?: string;
   contentType?: string;
+  cookie?: string;
 }
 
 export interface MjpegStream {
@@ -59,8 +60,10 @@ export function credsFrom(ctx: PersonaCtx, url: URL): HoneypotEvent["auth"] | un
       }
     }
     const params = new URLSearchParams(ctx.body);
-    const u = params.get("username") ?? params.get("user") ?? params.get("user1") ?? undefined;
-    const p = params.get("password") ?? params.get("passwd") ?? params.get("pwd") ?? undefined;
+    const u =
+      params.get("username") ?? params.get("user") ?? params.get("user1") ?? params.get("WAPLOGIN") ?? undefined;
+    const p =
+      params.get("password") ?? params.get("passwd") ?? params.get("pwd") ?? params.get("WAPPASSWORD") ?? undefined;
     if (u !== undefined || p !== undefined) return { user: u, password: p, kind: "form" };
   }
   return undefined;
