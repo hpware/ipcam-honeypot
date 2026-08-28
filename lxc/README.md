@@ -7,29 +7,49 @@ binary plus `src/`.
 ## One-shot from the Proxmox host
 
 ```sh
-cd ipcam-honeypot
-CTID=210 VLAN=50 bash lxc/create-on-proxmox-host.sh
+curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh | bash
 ```
 
-Variables (all optional): `CTID`, `HOSTNAME`, `MEMORY`, `SWAP`, `CORES`,
-`DISK`, `STORAGE`, `BRIDGE`, `VLAN`, `TEMPLATE`, `TEMPLATE_STORE`.
-
-The script:
-
-1. downloads the Debian 12 template if missing and creates an unprivileged CT
-   (DHCP on `vmbr0`, optional VLAN tag — put the CT on an isolated VLAN, see
-   "Isolation" below)
-2. pushes `src/`, `package.json`, `.env.example` and the unit file into the CT
-3. runs `setup-inside-ct.sh`: installs Bun to `/usr/local/bin`, creates the
-   locked `honeypot` user, installs to `/opt/ipcam-honeypot`, enables and
-   starts `ipcam-honeypot.service`
-
-Then:
+Customize by attaching variables to `bash` (not `curl` — vars before `curl`
+land in curl's environment, not the installer's):
 
 ```sh
-pct exec 210 -- journalctl -u ipcam-honeypot -f
-# http://<ct-ip>  rtsp://<ct-ip>:554  telnet://<ct-ip>
+# VLAN 50, static IP, PVE firewall on the NIC
+curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh \
+  | CTID=210 VLAN=50 IP=192.168.50.20/24 GW=192.168.50.1 FIREWALL=1 bash
+
+# bigger CT with tags and a DNS server
+curl -fsSL https://raw.githubusercontent.com/hpware/ipcam-honeypot/main/lxc/install.sh \
+  | CTID=211 CORES=2 MEMORY=1024 TAGS=honey,cam DNS=1.1.1.1 bash
 ```
+
+Or from a local checkout: `CTID=210 VLAN=50 bash lxc/create-on-proxmox-host.sh`.
+
+## All container settings
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CTID` | `210` | container id |
+| `HOSTNAME` | `ipcam-honeypot` | CT hostname |
+| `MEMORY` / `SWAP` / `CORES` | `512` / `256` / `1` | resources |
+| `DISK` | `2` | root disk size (GB) |
+| `STORAGE` | `local-lvm` | storage for the root disk |
+| `BRIDGE` | `vmbr0` | network bridge |
+| `VLAN` | *(empty)* | VLAN tag on the NIC |
+| `IP` | *(DHCP)* | static IP, e.g. `192.168.1.50/24` |
+| `GW` | *(empty)* | gateway (required companion to `IP`) |
+| `MTU` | *(empty)* | interface MTU |
+| `FIREWALL` | `0` | `1` = enable PVE firewall on the NIC |
+| `TAGS` | *(empty)* | PVE tags, comma separated |
+| `NOTES` | *(empty)* | CT notes/description |
+| `DNS` | *(host default)* | DNS server for the CT |
+| `UNPRIVILEGED` | `1` | `0` = privileged CT (not recommended) |
+| `ONBOOT` | `1` | start with the host |
+| `TEMPLATE` | *(auto)* | exact template name; auto = newest `debian-12/13-standard` for the host arch |
+| `TEMPLATE_STORE` | `local` | where templates are downloaded |
+
+Debian 13's systemd 257 needs `nesting=1` in unprivileged CTs, so that is set
+unconditionally (with a heal step for CTs created earlier without it).
 
 ## Manual (inside an existing CT)
 

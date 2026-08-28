@@ -35,6 +35,11 @@ tar -xzf "$TMP/repo.tar.gz" -C "$TMP"
 SRC=$(find "$TMP" -maxdepth 1 -mindepth 1 -type d | head -1)
 cd "$SRC"
 
+# forward any customization vars the caller set (CTID, VLAN, IP, GW, ...)
+for v in CTID HOSTNAME MEMORY SWAP CORES DISK STORAGE BRIDGE VLAN IP GW MTU \
+         FIREWALL TAGS NOTES DNS UNPRIVILEGED ONBOOT TEMPLATE TEMPLATE_STORE; do
+  if [ -n "${!v:-}" ]; then export "$v"; fi
+done
+
 echo "==> creating + provisioning LXC"
-export CTID HOSTNAME MEMORY SWAP CORES DISK STORAGE BRIDGE VLAN TEMPLATE TEMPLATE_STORE
 bash lxc/create-on-proxmox-host.sh

@@ -1,6 +1,27 @@
 #!/bin/bash
-# Run this ON the Proxmox VE host. Creates an unprivileged Debian 12 LXC and
-# provisions the honeypot into it. Adjust the variables below first.
+# Creates (or reuses) an unprivileged Debian LXC and provisions the honeypot
+# into it. Everything is customizable via environment variables:
+#
+#   CTID=210          container id                      (default 210)
+#   HOSTNAME=...      hostname                          (default ipcam-honeypot)
+#   MEMORY=512        RAM in MB                         (default 512)
+#   SWAP=256          swap in MB                        (default 256)
+#   CORES=1           cpu cores                         (default 1)
+#   DISK=2            root disk size in GB              (default 2)
+#   STORAGE=local-lvm storage for the root disk         (default local-lvm)
+#   BRIDGE=vmbr0      network bridge                    (default vmbr0)
+#   VLAN=50           VLAN tag (empty = none)
+#   IP=192.168.1.50/24  static IP (empty = DHCP)
+#   GW=192.168.1.1    gateway for static IP
+#   MTU=1500          interface MTU
+#   FIREWALL=1        enable PVE firewall on the NIC
+#   TAGS=honey,net    CT tags (PVE 7.3+)
+#   NOTES="..."       CT notes/description
+#   DNS=1.1.1.1       DNS server (empty = host setting)
+#   UNPRIVILEGED=0    create privileged CT instead      (default unprivileged)
+#   ONBOOT=1          start with host                   (default 1)
+#   TEMPLATE=...      exact template name (empty = auto: newest debian-1[23]-standard for this arch)
+#   TEMPLATE_STORE=local
 set -euo pipefail
 
 CTID=${CTID:-210}
@@ -12,7 +33,16 @@ DISK=${DISK:-2}
 STORAGE=${STORAGE:-local-lvm}
 BRIDGE=${BRIDGE:-vmbr0}
 VLAN=${VLAN:-}
-TEMPLATE=${TEMPLATE:-}   # empty = auto-pick newest debian-1x-standard
+IP=${IP:-}
+GW=${GW:-}
+MTU=${MTU:-}
+FIREWALL=${FIREWALL:-0}
+TAGS=${TAGS:-}
+NOTES=${NOTES:-}
+DNS=${DNS:-}
+UNPRIVILEGED=${UNPRIVILEGED:-1}
+ONBOOT=${ONBOOT:-1}
+TEMPLATE=${TEMPLATE:-}
 TEMPLATE_STORE=${TEMPLATE_STORE:-local}
 
 cd "$(dirname "$0")/.."
@@ -38,22 +68,41 @@ if ! pct status "$CTID" >/dev/null 2>&1; then
     fi
   fi
   echo "==> using template: $TEMPLATE"
-  NET="name=eth0,bridge=${BRIDGE},ip=dhcp"
-  if [ -n "$VLAN" ]; then
-    NET="${NET},tag=${VLAN}"
+
+  NET="name=eth0,bridge=${BRIDGE}"
+  if [ -n "$VLAN" ]; then NET="${NET},tag=${VLAN}"; fi
+  if [ -n "$IP" ]; then
+    NET="${NET},ip=${IP}"
+    [ -n "$GW" ] && NET="${NET},gw=${GW}"
+  else
+    NET="${NET},ip=dhcp"
   fi
-  pct create "$CTID" "${TEMPLATE_STORE}:vztmpl/${TEMPLATE}" \
-    --hostname "$HOSTNAME" \
-    --unprivileged 1 \
-    --features nesting=0 \
-    --memory "$MEMORY" --swap "$SWAP" --cores "$CORES" \
-    --rootfs "${STORAGE}:${DISK}" \
-    --net0 "$NET" \
-    --onboot 1 --start 1
+  if [ -n "$MTU" ]; then NET="${NET},mtu=${MTU}"; fi
+  if [ "$FIREWALL" = "1" ]; then NET="${NET},firewall=1"; fi
+
+  CREATE_ARGS=(
+    --hostname "$HOSTNAME"
+    --unprivileged "$UNPRIVILEGED"
+    --features nesting=1
+    --memory "$MEMORY" --swap "$SWAP" --cores "$CORES"
+    --rootfs "${STORAGE}:${DISK}"
+    --net0 "$NET"
+    --onboot "$ONBOOT"
+  )
+  [ -n "$TAGS" ] && CREATE_ARGS+=(--tags "$TAGS")
+  [ -n "$NOTES" ] && CREATE_ARGS+=(--description "$NOTES")
+  [ -n "$DNS" ] && CREATE_ARGS+=(--nameserver "$DNS")
+
+  pct create "$CTID" "${TEMPLATE_STORE}:vztmpl/${TEMPLATE}" "${CREATE_ARGS[@]}"
 fi
 
+# Debian 13 (systemd 257) needs nesting in unprivileged CTs; heal CTs created
+# before this default, and make sure an existing stopped CT is running.
+pct set "$CTID" --features nesting=1 >/dev/null 2>&1 || true
+pct start "$CTID" >/dev/null 2>&1 || true
+
 echo "waiting for network..."
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
   pct exec "$CTID" -- cat /proc/net/route >/dev/null 2>&1 && break
   sleep 1
 done
@@ -68,7 +117,7 @@ pct push "$CTID" lxc/ipcam-honeypot.service /root/ipcam-honeypot.service
 echo "provisioning..."
 pct exec "$CTID" -- bash /root/setup.sh
 
-IP=$(pct exec "$CTID" -- sh -c "ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+)+'" || true)
+IPADDR=$(pct exec "$CTID" -- sh -c "ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+)+'" || true)
 echo
-echo "honeypot CT $CTID is up: http://$IP  rtsp://$IP:554  telnet://$IP"
+echo "honeypot CT $CTID is up: http://${IPADDR:-<ct-ip>}  rtsp://${IPADDR:-<ct-ip>}:554  telnet://${IPADDR:-<ct-ip>}"
 echo "logs: pct exec $CTID -- journalctl -u ipcam-honeypot -f"
